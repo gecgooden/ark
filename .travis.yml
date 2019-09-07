@@ -18,7 +18,7 @@ matrix:
 
 install:
   - mvn initialize
-  - mvn install -DskipTests=true -Dmaven.javadoc.skip=true -B -V
+  - mvn install -Dmaven.javadoc.skip=true -B -V
 
 cache:
   directories:

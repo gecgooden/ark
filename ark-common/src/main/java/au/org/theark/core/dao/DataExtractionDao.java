@@ -25,18 +25,8 @@ import java.io.OutputStream;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeSet;
 
 import au.org.theark.core.model.pheno.entity.PhenoDataSetFieldDisplay;
 import org.apache.commons.lang.time.DateUtils;
@@ -779,127 +769,92 @@ public class DataExtractionDao<T> extends HibernateSessionDao implements IDataEx
 	
 	public File createPhenotypicCSV(Search search, DataExtractionVO devo, List<PhenoDataSetFieldDisplay> cfds, FieldCategory fieldCategory) {
 		final String tempDir = System.getProperty("java.io.tmpdir");
-		String filename = new String("PHENOTYPIC.csv");
+		String filename = "PHENOTYPIC.csv";
 		final java.io.File file = new File(tempDir, filename);
-		if (filename == null || filename.isEmpty()) {
-			filename = "exportcsv.csv";
-		}
-		
-		Set<String> headers = new HashSet<String>();
-		HashMap<String, List<String>> phenoCollectionMapping = new HashMap<String, List<String>>();
 
-		for(Entry<String, ExtractionVO> entry : devo.getPhenoCustomData().entrySet()) {
+		try {
+			OutputStream outputStream = new FileOutputStream(file);
+			createPhenoCSVOutputStream(devo, outputStream);
+		} catch (FileNotFoundException e) {
+			log.error("File not found", e);
+		}
+		return file;
+	}
+
+	void createPhenoCSVOutputStream(DataExtractionVO dataExtractionVO, OutputStream outputStream) {
+		Map<String, List<String>> phenoCollectionMapping = new HashMap<>();
+		Map<String, Integer> phenoCollectionTypeCount = new HashMap<>();
+		for(Entry<String, ExtractionVO> entry : dataExtractionVO.getPhenoCustomData().entrySet()) {
 			String subjectUID = entry.getValue().getSubjectUid();
 			if(phenoCollectionMapping.containsKey(subjectUID)) {
 				phenoCollectionMapping.get(subjectUID).add(entry.getKey());
 			} else {
-				List<String> phenoCollectionIDs = new ArrayList<String>();
+				List<String> phenoCollectionIDs = new ArrayList<>();
 				phenoCollectionIDs.add(entry.getKey());
 				phenoCollectionMapping.put(subjectUID, phenoCollectionIDs);
 			}
+
+			String collectionName = entry.getValue().getCollectionName();
+			phenoCollectionTypeCount.put(collectionName, phenoCollectionTypeCount.getOrDefault(collectionName, 0) + 1);
 		}
 
-		Set<String> phenoCollectionHeadersSet = new HashSet<String>();
-		int maxPhenoCollections = 0; 
-		for(List<String> pc : phenoCollectionMapping.values()) { 
-			if(pc.size() > maxPhenoCollections) { 
-				maxPhenoCollections = pc.size(); 
+		Set<String> phenoCollectionHeadersSet = new HashSet<>();
+		int maxPhenoCollections = 0;
+		for(List<String> pc : phenoCollectionMapping.values()) {
+			if(pc.size() > maxPhenoCollections) {
+				maxPhenoCollections = pc.size();
 			}
 		}
-		
-		Iterator<ExtractionVO> iter = devo.getPhenoCustomData().values().iterator();
-		while(iter.hasNext()) {
-			ExtractionVO evo = iter.next();
+
+		for (ExtractionVO evo : dataExtractionVO.getPhenoCustomData().values()) {
 			phenoCollectionHeadersSet.addAll(evo.getKeyValues().keySet());
 		}
 
-		List<String> phenoCollectionHeaders = new ArrayList<String>(phenoCollectionHeadersSet);
-		List<String> headersList = new ArrayList<String>(headers);
+		List<String> phenoCollectionHeaders = new ArrayList<>(phenoCollectionHeadersSet);
 		Collections.sort(phenoCollectionHeaders);
 
 		phenoCollectionHeaders.add(0, "Record Date");
 		phenoCollectionHeaders.add(1, "Collection Name");
 
-		OutputStream outputStream;
-		try {
-			outputStream = new FileOutputStream(file);
-			CsvWriter csv = new CsvWriter(outputStream);
-			
-			csv.write("Subject UID");
-			
-			for(String header : headersList) {
-				csv.write(header);
+		CsvWriter csv = new CsvWriter(outputStream);
+		csv.write("Subject UID");
+
+		for(int i = 1; i <= maxPhenoCollections; i++) {
+			for(String header : phenoCollectionHeaders) {
+				csv.write("P" + i + "_" + header);
 			}
-			
-			for(int i = 1; i <= maxPhenoCollections; i++) {
+		}
+
+		csv.endLine();
+
+		for(Entry<String, List<String>> entry : phenoCollectionMapping.entrySet()) {
+			String subjectUID = entry.getKey();
+			if (!phenoCollectionMapping.containsKey(subjectUID)) {
+				continue;
+			}
+
+			csv.write(subjectUID);
+			DateFormat df = new SimpleDateFormat("MM/dd/yyyy");
+			for(String phenoCollectionID : phenoCollectionMapping.get(subjectUID)) {
+				ExtractionVO phenoCollectionData = dataExtractionVO.getPhenoCustomData().get(phenoCollectionID);
 				for(String header : phenoCollectionHeaders) {
-					csv.write("P" + i + "_" + header);
+					if(header.equals("Record Date")) {
+						csv.write(df.format(phenoCollectionData.getRecordDate()));
+					} else if(header.equals("Collection Name")) {
+						csv.write(phenoCollectionData.getCollectionName());
+					} else csv.write(phenoCollectionData.getKeyValues().getOrDefault(header, ""));
 				}
 			}
-			
-			csv.endLine();
-			
-			for(String subjectUID : phenoCollectionMapping.keySet()) {
-				if (!phenoCollectionMapping.containsKey(subjectUID)) {
-					continue;
-				}
-				
-				List<String> row = new ArrayList<String>();
-				csv.write(subjectUID);
-				
-				ExtractionVO subjectData = devo.getDemographicData().get(subjectUID);
-				ExtractionVO subjectCustomData = devo.getSubjectCustomData().get(subjectUID);
-				for(String header : headersList) {
-					if(subjectData.getKeyValues().containsKey(header)) {
-						csv.write(subjectData.getKeyValues().get(header));
-					} else if(subjectCustomData != null && subjectCustomData.getKeyValues().containsKey(header)) {
-						csv.write(subjectCustomData.getKeyValues().get(header));
-					} else {
+			if(phenoCollectionMapping.get(subjectUID).size() < maxPhenoCollections) {
+				for(int i = 0; i < (maxPhenoCollections - phenoCollectionMapping.get(subjectUID).size()); i++) {
+					for(int j = 0; j < phenoCollectionHeaders.size(); j++) {
 						csv.write("");
 					}
 				}
-				if(phenoCollectionMapping.containsKey(subjectUID)) {
-					DateFormat df = new SimpleDateFormat("MM/dd/yyyy");
-					for(String phenoCollectionID : phenoCollectionMapping.get(subjectUID)) {
-						ExtractionVO phenoCollectionData = devo.getPhenoCustomData().get(phenoCollectionID);
-						for(String header : phenoCollectionHeaders) {
-							if(header.equals("Record Date")) {
-								csv.write(df.format(phenoCollectionData.getRecordDate()));
-							} else if(header.equals("Collection Name")) {
-								csv.write(phenoCollectionData.getCollectionName());
-							} else if(phenoCollectionData.getKeyValues().containsKey(header)) {
-								csv.write(phenoCollectionData.getKeyValues().get(header));
-							} else {
-								csv.write("");
-							}
-						}
-					}
-					if(phenoCollectionMapping.get(subjectUID).size() < maxPhenoCollections) {
-						for(int i = 0; i < (maxPhenoCollections - phenoCollectionMapping.get(subjectUID).size()); i++) {
-							for(String header : phenoCollectionHeaders) {
-								csv.write("");
-							}
-						}
-					}
-				} else {
-					for(int i = 0; i < maxPhenoCollections; i++) {
-						for(String header : phenoCollectionHeaders) {
-							csv.write("");
-						}
-					}
-				}
-				csv.endLine();
 			}
-			
-			csv.close();
-		
+			csv.endLine();
 		}
-		catch (FileNotFoundException e) {
-			log.error(e.getMessage());
-		}
-
-		
-		return file;
+		csv.close();
 	}
 	
 	public File createConsentStatusCSV(Search search, DataExtractionVO devo, List<ConsentStatusField> consentStatusFields, FieldCategory fieldCategory) {
