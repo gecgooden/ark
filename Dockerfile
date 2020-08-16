@@ -2,7 +2,7 @@ FROM openjdk:8
 
 MAINTAINER George Gooden <gecgooden@gmail.com>
 
-ENV MAVEN_VERSION 3.6.1
+ENV MAVEN_VERSION 3.6.3
 
 RUN mkdir -p /usr/share/maven \
   && curl -fsSL http://apache.osuosl.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
@@ -14,11 +14,11 @@ ENV MAVEN_HOME /usr/share/maven
 RUN mkdir -p /usr/src/app /usr/target/
 WORKDIR /usr/src/app
 
+RUN apt-get update && apt-get install -y build-essential libxml2 libxml2-dev libcurl4 libcurl4-gnutls-dev zlib1g zlib1g-dev libbz2-1.0 libbz2-dev libssl-dev
+
 ADD ark-common/src/main/native/madeline /usr/src/app/ark-common/src/main/native/madeline
 
-RUN apt-get update && apt-get install -y build-essential libxml2 libxml2-dev libcurl3 libcurl4-gnutls-dev zlib1g zlib1g-dev libbz2-1.0 libbz2-dev libssl-dev 
-
-RUN cd /usr/src/app/ark-common/src/main/native/madeline && \ 
+RUN cd /usr/src/app/ark-common/src/main/native/madeline && \
 	sed -i "s/java-6-openjdk-amd64/java-8-openjdk-amd64/g" Makefile && \
 	make clean && \
 	make && \
@@ -86,10 +86,6 @@ ADD ark-user-account /usr/src/app/ark-user-account
 #Replace with reading from env_file
 ADD docker/env_file docker/env_file
 RUN cat docker/env_file >> ~/.bashrc
-#ENV MYSQL_ROOT_PASSWORD=mysql-password
-#ENV SLAPD_PASSWORD=slapd-password
-#ENV ARK_SUPERUSER_PASSWORD=Password_1
-#ENV ARK_USERNAME=arksuperuser@ark.org.au
 
 ADD docker/base/ark-user-account-config.sh docker/base/ark-user-account-config.sh
 RUN chmod +x docker/base/ark-user-account-config.sh

@@ -125,7 +125,7 @@ void DrawingLabelManager::setLabelSet(const LabelSet* labelSet){
 	
 	SCRIPTCODE script;
 	std::string sampleString;
-	static std::map<SCRIPTCODE,UnicodeScript,UnicodeScript::compare>::iterator found;
+	static std::map<SCRIPTCODE,UnicodeScript>::iterator found;
 	//
 	// Now iterate over sample labels looking for non-ASCII Unicode labels:
 	//

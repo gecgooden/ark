@@ -1,43 +1,36 @@
 version: '2'
 services:
-        base:
-                build: ..
-                image: the-ark/base:latest
         mysql:
-                build: db
+                build: docker/db
                 ports:
                         - "3306:3306"
-                env_file: env_file
+                env_file: docker/env_file
                 volumes:
                         - ./db/init:/docker-entrypoint-initdb.d
                         - mysql_data:/var/lib/mysql
         slapd:
-                build: slapd
-                env_file: env_file
-                depends_on:
-                        - base
+                build: docker/slapd
+                env_file: docker/env_file
                 ports:
                         - "389:389"
-                volumes_from:
-                        - base
                 volumes:
                         - slapd_data:/var/lib/ldap
                         - slapd_conf:/etc/ldap
-
         tomcat:
-                build: tomcat
+                build:
+                        context: ./
+                        dockerfile: Dockerfile-tomcat
                 depends_on:
                         - mysql
                         - slapd
-                        - base
                 links:
                         - mysql
                         - slapd
                 volumes:
                         - datastore:/opt/ark-datastore
-                volumes_from:
-                        - base
-                env_file: env_file
+                        - ./tomcat/ark.xml:/usr/local/tomcat/conf/Catalina/localhost/ark.xml
+                        - ../ark-container/target/ark.war:/usr/local/tomcat/webapps/ark.war
+                env_file: docker/env_file
                 ports:
                         - "8080:8080"
                         - "8000:8000"

@@ -51,9 +51,9 @@ public:
 	//
 	struct compare
 	{
-		bool operator()(const UnicodeScript & m1, const UnicodeScript & m2) const
+		bool operator() (const UnicodeScript& m1, const UnicodeScript& m2) const
 		{
-			return m1._scriptCode < m2._scriptCode ;
+			return m1._scriptCode < m2._scriptCode;
 		}
 	};
 	

@@ -1,0 +1,32 @@
+FROM tomcat:7-jdk8 as madeline
+
+RUN apt-get update && apt-get install -y \
+        build-essential \
+        libxml2 \
+        libxml2-dev \
+        libcurl4 \
+        libcurl4-gnutls-dev \
+        zlib1g \
+        zlib1g-dev \
+        libbz2-1.0 \
+        libbz2-dev \
+        libssl-dev
+
+ADD ark-common/src/main/native/madeline /madeline
+
+WORKDIR /madeline
+
+RUN make clean
+RUN make
+
+FROM tomcat:7-jre8
+
+RUN apt-get update && apt-get install -y libcurl4-gnutls-dev libxml2-dev
+
+COPY --from=madeline --chown=root /madeline/libmadeline.so /usr/local/tomcat/lib
+
+EXPOSE 8000
+
+ENV JAVA_OPTS -Djava.library.path=/usr/local/tomcat/lib
+
+CMD catalina.sh jpda run
